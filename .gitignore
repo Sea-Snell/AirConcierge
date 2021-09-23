@@ -1,0 +1,8 @@
+.DS_Store
+checkpoints/
+data/
+*.tar.gz
+airdialogue_label/
+airdialogue_sql/
+AirDialogue/confirm.txt
+AirDialogue/cookies.txt

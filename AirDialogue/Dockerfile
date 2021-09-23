@@ -27,20 +27,20 @@ ENV LANGUAGE en_US:en
 ENV LC_ALL en_US.UTF-8
 
 # Install packages in python 2.7
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir --upgrade setuptools && \
-    pip install --no-cache-dir numpy==1.16.6 Pillow==6.2.2 PyYAML==5.3.1 six==1.15.0 wheel==0.35.1 && \
-    pip install --no-cache-dir sklearn matplotlib dill tensorboardX scipy pandas sympy nose tqdm scikit-learn scikit-image nltk && \
-    pip install --no-cache-dir torch==1.3.1+cu100 torchvision==0.4.2+cu100 -f https://download.pytorch.org/whl/torch_stable.html && \
-    pip install --no-cache-dir torchtext==0.4.0 
-    pip install --no-cache-dir tensorflow-gpu==1.14.0
+RUN python -m pip install --no-cache-dir --upgrade pip==9.0.1 && \
+    python -m pip install --no-cache-dir --upgrade setuptools && \
+    python -m pip install --no-cache-dir numpy==1.16.6 Pillow==6.2.2 PyYAML==5.3.1 six==1.15.0 wheel==0.35.1 && \
+    python -m pip install --no-cache-dir sklearn matplotlib dill tensorboardX==2.1 scipy pandas sympy nose tqdm scikit-learn scikit-image nltk && \
+    python -m pip install --no-cache-dir torch==1.3.1+cu100 torchvision==0.4.2+cu100 -f https://download.pytorch.org/whl/torch_stable.html && \
+    python -m pip install --no-cache-dir torchtext==0.4.0 && \
+    python -m pip install --no-cache-dir tensorflow-gpu==1.14.0
 
 # Install packages in python 3.5
-RUN pip3 install --no-cache-dir --upgrade pip && \
-    pip3 install --no-cache-dir --upgrade setuptools && \
-    pip3 install --no-cache-dir numpy==1.16.6 Pillow==6.2.2 PyYAML==5.3.1 six==1.15.0 wheel==0.35.1 && \
-    pip3 install --no-cache-dir sklearn matplotlib dill tensorboardX scipy pandas sympy nose tqdm scikit-learn scikit-image nltk && \
-    pip3 install --no-cache-dir argparse
+RUN python3 -m pip install --no-cache-dir --upgrade pip==9.0.1 && \
+    python3 -m pip install --no-cache-dir --upgrade setuptools && \
+    python3 -m pip install --no-cache-dir numpy==1.16.6 Pillow==6.2.2 PyYAML==5.3.1 six==1.15.0 wheel==0.35.1 && \
+    python3 -m pip install --no-cache-dir sklearn matplotlib dill tensorboardX scipy pandas sympy nose tqdm scikit-learn scikit-image nltk && \
+    python3 -m pip install --no-cache-dir argparse
 
 # Initialize workspace
 WORKDIR /
