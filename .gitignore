@@ -6,3 +6,7 @@ airdialogue_label/
 airdialogue_sql/
 AirDialogue/confirm.txt
 AirDialogue/cookies.txt
+*.swp
+*.pyc
+results/
+runs/
