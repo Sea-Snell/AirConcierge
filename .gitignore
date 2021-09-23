@@ -10,3 +10,4 @@ AirDialogue/cookies.txt
 *.pyc
 results/
 runs/
+.startup
