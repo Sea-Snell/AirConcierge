@@ -151,6 +151,7 @@ parser.add_argument('--infer_bleu_prior', action='store_true')
 parser.add_argument('--infer_bleu', action='store_true')
 parser.add_argument('--self_play_eval_prior', action='store_true')
 parser.add_argument('--self_play_eval', action='store_true')
+parser.add_argument('--infer_test', action='store_true')
 parser.add_argument('--mode', type=str)
 parser.add_argument('--only_f', action='store_true')
 parser.add_argument('--nnkb', action='store_true')
@@ -298,6 +299,8 @@ elif args.self_play_eval:
     print('Self play eval ... ')
     t = SupervisedSelfPlayEval(model_dir=args.model_dir, args=args, corpus=corpus)
     seq2seq = t.test(args, seq2seq, dataloader, resume=args.resume, save_dir=args.save_dir)
+elif args.infer_test:
+    print('infer test')
 else:
     print('SupervisedTrainer ... ')
     # train
