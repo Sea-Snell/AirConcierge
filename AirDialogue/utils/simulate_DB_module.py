@@ -25,7 +25,7 @@ if args.dev:
     data_file = data_path2 + 'tokenized/dev/dev.eval.data'
     # eval step sql
     query_file = data_path + 'dev_sql/dev_predict_query'
-    query2_file = data_path + 'dev_sql/dev_simple'
+    query2_file = data_path + 'dev_sql/dev_simple' 
     true_query_file = data_path + 'dev_sql/dev_gt_query'
     gate_file = data_path + 'dev_sql/dev_gate'
     # output file

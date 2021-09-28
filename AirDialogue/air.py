@@ -12,8 +12,11 @@ from seq2seq.trainer import SupervisedInference
 from seq2seq.trainer import SupervisedInferencePrior
 from seq2seq.trainer import SupervisedSelfPlayEval
 from seq2seq.trainer import SupervisedSelfPlayPrior
+from seq2seq.inference import InferModel
+from seq2seq.inference import ConverseModel
 from seq2seq.models import EncoderRNN, DecoderRNN, Seq2seq
 from seq2seq.util.checkpoint import Checkpoint
+import serve
 
 from dataloader import *
 
@@ -26,7 +29,6 @@ try:
     raw_input          # Python 2
 except NameError:
     raw_input = input  # Python 3
-
 net_hidden = 256
 parser = argparse.ArgumentParser()
 parser.add_argument('--train_path', action='store', dest='train_path', help='Path to train data')
@@ -152,6 +154,8 @@ parser.add_argument('--infer_bleu', action='store_true')
 parser.add_argument('--self_play_eval_prior', action='store_true')
 parser.add_argument('--self_play_eval', action='store_true')
 parser.add_argument('--infer_test', action='store_true')
+parser.add_argument('--converse_test', action='store_true')
+parser.add_argument('--serve', action='store_true')
 parser.add_argument('--mode', type=str)
 parser.add_argument('--only_f', action='store_true')
 parser.add_argument('--nnkb', action='store_true')
@@ -209,6 +213,14 @@ elif args.infer_bleu:
 elif args.self_play_eval_prior:
     print('Self play prior !')
     dataloader, corpus = SelfPlayEval_loader(args.batch_size, args.toy, args.max_len, args.shuffle, args.mask, args.only_f, args.dev, args.n_sample, args.smallkb_n, args)
+elif args.infer_test:
+    print('Infer !!!')
+    dataloader, prior_corpus, selfplay_corpus = Infer_loader(args.batch_size, args.toy, args.max_len, args.shuffle, args.mask, args.only_f, args.dev, args.n_sample, args.smallkb_n, args)
+    corpus = prior_corpus
+elif args.converse_test or args.serve:
+    print('Converse !!!')
+    dataloader, prior_corpus, selfplay_corpus = Infer_loader(args.batch_size, args.toy, args.max_len, args.shuffle, args.mask, args.only_f, args.dev, args.n_sample, args.smallkb_n, args)
+    corpus = prior_corpus
 elif args.self_play_eval:
     print('Self play eval !')
     dataloader, corpus = SelfPlayEval_loader_2(args.batch_size, args.toy, args.max_len, args.shuffle, args.mask, args.only_f, args.dev, args.n_sample, args.smallkb_n, args)
@@ -301,6 +313,16 @@ elif args.self_play_eval:
     seq2seq = t.test(args, seq2seq, dataloader, resume=args.resume, save_dir=args.save_dir)
 elif args.infer_test:
     print('infer test')
+    t = InferModel(model_dir=args.model_dir, args=args, prior_corpus=prior_corpus, selfplay_corpus=selfplay_corpus)
+    seq2seq = t.infer(args, seq2seq, dataloader, resume=args.resume, save_dir=args.save_dir)
+elif args.converse_test:
+    print('converse test')
+    t = ConverseModel(model_dir=args.model_dir, args=args, prior_corpus=prior_corpus, selfplay_corpus=selfplay_corpus)
+    seq2seq = t.main(args, seq2seq, dataloader, resume=args.resume, save_dir=args.save_dir)
+elif args.serve:
+    t = ConverseModel(model_dir=args.model_dir, args=args, prior_corpus=prior_corpus, selfplay_corpus=selfplay_corpus)
+    serve.main(t, args, seq2seq, dataloader)
+    # seq2seq = t.main(args, seq2seq, dataloader, resume=args.resume, save_dir=args.save_dir)
 else:
     print('SupervisedTrainer ... ')
     # train

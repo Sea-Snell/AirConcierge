@@ -17,9 +17,10 @@ from utils.utils import *
 from tensorboardX import SummaryWriter 
 from torch.optim import lr_scheduler
 from torch.nn.utils.rnn import pad_sequence
+from dataloader.infer_dataloader import basic_tokenize
 # from utils import simulate_DB
 
-class InferModel(object):
+class ConverseModel(object):
     def __init__(self, model_dir='checkpoints/', args=None, prior_corpus=None, selfplay_corpus=None):
         self._trainer = "Simple Inference"
 
@@ -65,9 +66,8 @@ class InferModel(object):
                 simple_query[i] = int(query[curr].split()[-1])
                 curr += 1
         return simple_query
-
     
-    def infer_to_gate(self, model, intent, size_intent, action, has_reservation, col_seq, truth_seq, SQL_YN, kb_true_answer, args=None):
+    def converse_to_gate(self, dialogue_tokens_lists, model, intent, size_intent, action, has_reservation, col_seq, truth_seq, SQL_YN, kb_true_answer, args=None):
         with torch.no_grad():
             model.eval()
             intent, size_intent, action, has_reservation, col_seq, SQL_YN, kb_true_answer = intent.cuda(), size_intent.cuda(), action.cuda(), has_reservation.cuda(), col_seq.cuda(), SQL_YN.cuda(), kb_true_answer.cuda()
@@ -89,22 +89,20 @@ class InferModel(object):
                     action_sentsw[i].append('<fl_'+str(int(action[i,2].data) + 1000)+'>')
                 action_sents[i].append(self.prior_corpus.dictionary.idx2word[action[i,3].data])
                 action_sentsw[i].append(self.prior_corpus.dictionary.idx2word[action[i,3].data])
-            
+
             history = [[1]] # <t1>
             history_sents = [['<t1>']]
-            SQL_buffer = []
             request = 0
-            DB_kb_buffer = []
             eod_id= self.prior_corpus.dictionary.word2idx['<eod>']
             end = 0
             t2_gate_turn = -1
-            SQL_query = 'None'
-            pred = 'None'
-            pred_gate = '0'
 
             for turn_i in range(args.max_dialogue_turns):
-                # Customer
-                if turn_i % 2 == 0: # <t1>
+                turn, dialogue_tokens = dialogue_tokens_lists[turn_i]
+                if turn == 'Customer':
+                    history = [dialogue_tokens] # <t1>
+                    history_sents = [list(map(lambda x: self.prior_corpus.dictionary.idx2word[x], dialogue_tokens))]
+
                     if args.sql:
                         # list to tensor
                         source_diag = pad_sequence(self.list_to_tensor(history), batch_first=True, padding_value=eod_id); source_diag = source_diag.cuda()
@@ -140,9 +138,10 @@ class InferModel(object):
                             end = 1
                             boundary_list = self.check_boundary(history_sents[i])
                             break
-                    
-                # Agent
-                if turn_i % 2 == 1: # <t2>
+                elif turn == 'Agent':
+                    history = [dialogue_tokens] # <t1>
+                    history_sents = [list(map(lambda x: self.prior_corpus.dictionary.idx2word[x], dialogue_tokens))]
+
                     if args.sql:
                         # Dialogue input : list to tensor
                         source_diag = pad_sequence(self.list_to_tensor(history), batch_first=True, padding_value=eod_id); source_diag = source_diag.cuda()
@@ -238,17 +237,11 @@ class InferModel(object):
                                 else:
                                     history_gate.append(history_sents[i][h])
                             break
-                    
-                if end == 1:
+                if end == 1 or turn_i >= (len(dialogue_tokens_lists) - 1):
                     break
-        return t2_gate_turn
+        return t2_gate_turn, history[0]
     
-    # def simulate_db(self, kb_sents, sort_true_query, sort_truth_gate, sort_query, sort_query2, sort_gate, sents):
-    #     samll_flight, small_db, total, keep, error, error_truth, record = simulate_DB(kb_sents, sort_true_query, sort_truth_gate, sort_query, sort_query2, sort_gate, 12, list(range(len(kb_sents))), sents)
-    #     record.sort(key=lambda x: x[0])
-    #     return record
-    
-    def infer_from_gate(self, model, intent, size_intent, action, kb, has_reservation, col_seq, truth_seq, SQL_YN, turn_gate, args=None):
+    def converse_from_gate(self, dialogue_tokens_lists, model, intent, size_intent, action, kb, has_reservation, col_seq, truth_seq, SQL_YN, turn_gate, args=None):
         turn_gate = [turn_gate]
         with torch.no_grad(): 
             intent, size_intent, action, kb, has_reservation, col_seq, SQL_YN = intent.cuda(), size_intent.cuda(), action.cuda(), kb.cuda(), has_reservation.cuda(), col_seq.cuda(), SQL_YN.cuda()
@@ -271,12 +264,10 @@ class InferModel(object):
                     action_sentsw[i].append('<fl_'+str(int(action[i,2].data) + 1000)+'>')
                 action_sents[i].append(self.selfplay_corpus.dictionary.idx2word[action[i,3].data])
                 action_sentsw[i].append(self.selfplay_corpus.dictionary.idx2word[action[i,3].data])
-            
+                
             history = [[1]] # <t1>
             history_sents = [['<t1>']]
-            SQL_buffer = []
             request = 0
-            DB_kb_buffer = []
             eod_id= self.selfplay_corpus.dictionary.word2idx['<eod>']
             end = 0
             concat_flight_embed = torch.zeros((1, 1, 256)); concat_flight_embed = concat_flight_embed.cuda()
@@ -284,9 +275,11 @@ class InferModel(object):
             predict_flight_number = 'None'
 
             for turn_i in range(args.max_dialogue_turns):
+                turn, dialogue_tokens = dialogue_tokens_lists[turn_i]
+                if turn == 'Customer':
+                    history = [dialogue_tokens] # <t1>
+                    history_sents = [list(map(lambda x: self.prior_corpus.dictionary.idx2word[x], dialogue_tokens))]
 
-                # Customer
-                if turn_i % 2 == 0: # <t1>
                     if args.sql:
                         # list to tensor
                         source_diag = pad_sequence(self.list_to_tensor(history), batch_first=True, padding_value=eod_id); source_diag = source_diag.cuda()
@@ -320,13 +313,11 @@ class InferModel(object):
                     for i in range(b):
                         if '<eod>' in sents[i]:
                             end = 1
-                            # boundary_list = self.check_boundary(history_sents[i])
-                            # out = " ".join(intent_sents[i]) + "|" + " ".join(action_sents[i]) + "|" + " ".join(history_sents[i]) + "|" + " ".join(boundary_list) + "\n"
-                            # t_fp.write(out)
                             break
-                    
-                # Agent
-                if turn_i % 2 == 1: # <t2>
+                if turn == 'Agent':
+                    history = [dialogue_tokens] # <t1>
+                    history_sents = [list(map(lambda x: self.prior_corpus.dictionary.idx2word[x], dialogue_tokens))]
+
                     if args.sql:
                         # Dialogue input : list to tensor
                         source_diag = pad_sequence(self.list_to_tensor(history), batch_first=True, padding_value=eod_id); source_diag = source_diag.cuda()
@@ -404,84 +395,76 @@ class InferModel(object):
                     for i in range(b):
                         if '<eod>' in sents[i]:
                             end = 1
-                            # boundary_list = self.check_boundary(history_sents[i])
-                            # history_gate = []
-                            # for h in range(len(history_sents[i])):
-                            #     if h < predicted_gate[i].size(0):
-                            #         history_gate.append(str(history_sents[i][h]) + '_' + str(predicted_gate[i][h].data.item()))
-                            #     else:
-                            #         history_gate.append(history_sents[i][h])
-                            # out = " ".join(intent_sents[i]) + "|" + " ".join(action_sents[i]) + "|" + " ".join(history_gate) + "|" + " ".join(boundary_list) + "\n"
-                            # t_fp.write(out)
-                            # t_fp.flush()
                             break
-                    
-                if end == 1:
+                if end == 1 or turn_i >= (len(dialogue_tokens_lists)-1):
                     break
-            # action
-            source_diag = pad_sequence(self.list_to_tensor(history), batch_first=True, padding_value=eod_id); source_diag = source_diag.cuda()
-            b = source_diag.size(0)
-            size_history = []
-            for i in range(b):
-                size_history.append(len(history[i]))
-            size_dialogue = torch.tensor(size_history, dtype=torch.int64); size_dialogue = size_dialogue.cuda()
-            # display source input 
-            source_diag_sents = [[] for _ in range(b)]
-            for i in range(b):
-                for j in source_diag[i]:
-                    source_diag_sents[i].append(self.selfplay_corpus.dictionary.idx2word[j.data])
-            logits_train3 = model.module.Call_t2_SelfPlayEval_2(source_diag, size_dialogue, has_reservation, col_seq, concat_flight_embed, turn_gate=turn_index, end=1, args=args)
-            
-            correct, predict_action = compute_action_nn(logits_train3, action)
-            # correct_firstname += correct[0].item() ; 
-            # correct_lastname += correct[1].item() ;
-            # correct_flight += correct[2].item();
-            # correct_state += correct[3].item() ;
-            # predict_action_name1 = self.selfplay_corpus.dictionary.idx2word[predict_action[0][0].data.item()]
-            # predict_action_name2 = self.selfplay_corpus.dictionary.idx2word[predict_action[1][0].data.item()]
-            # predict_action_flight = predict_action[2][0].data.item()
-            # if predict_action_flight == 30:
-            #     predict_action_flight = '<fl_empty>'
-            # else:
-            #     predict_action_flight = '<fl_' + str(int(predict_action_flight)+1000) + '>'
-            # predict_action_state = self.selfplay_corpus.dictionary.idx2word[predict_action[3][0].data.item()]
-            # action_out = " ".join(action_sentsw[i]) + "|" + str(predict_action_name1) + " " + str(predict_action_name2) + " " + str(predict_action_flight) + " " + str(predict_action_state) + "\n"
-            # a_fp.write(action_out)
-            # a_fp.flush()
+        
+            if end == 1:
+                source_diag = pad_sequence(self.list_to_tensor(history), batch_first=True, padding_value=eod_id); source_diag = source_diag.cuda()
+                b = source_diag.size(0)
+                size_history = []
+                for i in range(b):
+                    size_history.append(len(history[i]))
+                size_dialogue = torch.tensor(size_history, dtype=torch.int64); size_dialogue = size_dialogue.cuda()
+                # display source input 
+                source_diag_sents = [[] for _ in range(b)]
+                for i in range(b):
+                    for j in source_diag[i]:
+                        source_diag_sents[i].append(self.selfplay_corpus.dictionary.idx2word[j.data])
+                logits_train3 = model.module.Call_t2_SelfPlayEval_2(source_diag, size_dialogue, has_reservation, col_seq, concat_flight_embed, turn_gate=turn_index, end=1, args=args)
+                _, predict_action_temp = compute_action_nn(logits_train3, action)
+                predict_action_name1 = self.selfplay_corpus.dictionary.idx2word[predict_action_temp[0][0].data.item()]
+                predict_action_name2 = self.selfplay_corpus.dictionary.idx2word[predict_action_temp[1][0].data.item()]
+                predict_action_flight = predict_action_temp[2][0].data.item()
+                if predict_action_flight == 30:
+                    predict_action_flight = 0
+                else:
+                    predict_action_flight = int(predict_action_flight)+1000
+                predict_action_state = self.selfplay_corpus.dictionary.idx2word[predict_action_temp[3][0].data.item()]
+                predict_action = (predict_action_state.split('_', 1)[1].split('>', 1)[0], predict_action_name1 + ' ' + predict_action_name2, predict_action_flight)
+            else:
+                predict_action = None
+        
+        return history[0], predict_action
 
-            # check answer
-            # if action_sents[i][3] == '<st_book>':
-            #     all_combination_total[0] += 1
-            #     if action_sents[i][3] == predict_action_state:
-            #         all_combination_correct[0] += 1
-            # elif action_sents[i][3] == '<st_change>':
-            #     all_combination_total[1] += 1
-            #     if action_sents[i][3] == predict_action_state:
-            #         all_combination_correct[1] += 1
-            # elif action_sents[i][3] == '<st_cancel>':
-            #     all_combination_total[2] += 1
-            #     if action_sents[i][3] == predict_action_state:
-            #         all_combination_correct[2] += 1
-            # elif action_sents[i][3] == '<st_no_reservation>':
-            #     all_combination_total[3] += 1
-            #     if action_sents[i][3] == predict_action_state:
-            #         all_combination_correct[3] += 1
-            # elif action_sents[i][3] == '<st_no_flight>':
-            #     all_combination_total[4] += 1
-            #     if action_sents[i][3] == predict_action_state:
-            #         all_combination_correct[4] += 1
-            # total = total + 1
-
-    def infer_one(self, model, prior_items, selfplay_items, args=None):
+    def converse_one(self, utterances, model, prior_items, selfplay_items, args=None):
         intent, size_intent, action, has_reservation, col_seq, truth_seq, SQL_YN, kb_true_answer = prior_items
-        turn_gate = self.infer_to_gate(model, intent, size_intent, action, has_reservation, 
+        intent_strs = list(map(lambda x: self.prior_corpus.dictionary.idx2word[x], intent[0]))
+        final_state_strs = list(map(lambda x: self.prior_corpus.dictionary.idx2word[x], action[0]))
+        intent_goal = intent_strs[14].split('_', 1)[1].split('>', 1)[0]
+        if len(final_state_strs) != 4:
+            final_state = final_state_strs[1].split('_', 1)[1].split('>', 1)[0]
+        else:
+            final_state = final_state_strs[3].split('_', 1)[1].split('>', 1)[0]
+        dialogue_tokens_lists_prior = [(utterances[0][0], [self.prior_corpus.dictionary.word2idx['<t1>' if utterances[0][0] == 'Customer' else '<t2>']])]
+        dialogue_tokens_lists_selfplay = [(utterances[0][0], [self.selfplay_corpus.dictionary.word2idx['<t1>' if utterances[0][0] == 'Customer' else '<t2>']])]
+        for i, (speaker, utterance) in enumerate(utterances):
+            if speaker == 'Agent' or speaker == 'Customer':
+                dialogue_tokens_lists_prior.append(('Agent' if speaker == 'Customer' else 'Customer', basic_tokenize(self.prior_corpus.dictionary, utterances[:(i+1)], intent_goal, final_state, mask=True, add_end=False)))
+                dialogue_tokens_lists_selfplay.append(('Agent' if speaker == 'Customer' else 'Customer', basic_tokenize(self.selfplay_corpus.dictionary, utterances[:(i+1)], intent_goal, final_state, mask=True, add_end=False)))
+            else:
+                raise NotImplementedError
+
+        turn_gate, new_history = self.converse_to_gate(dialogue_tokens_lists_prior, model, intent, size_intent, action, has_reservation, 
                                        col_seq, truth_seq, SQL_YN, kb_true_answer, args=args)
+        new_str = ' '.join(map(lambda x: self.prior_corpus.dictionary.idx2word[x], new_history))
+        predict_action = None
         intent, size_intent, action, kb, has_reservation, col_seq, truth_seq, SQL_YN, _ = selfplay_items
-        self.infer_from_gate(model, intent, size_intent, action, 
-                             kb, has_reservation, col_seq, truth_seq, 
-                             SQL_YN, turn_gate, args=args)
+        new_history, predict_action = self.converse_from_gate(dialogue_tokens_lists_selfplay, model, intent, size_intent, action, 
+                                kb, has_reservation, col_seq, truth_seq, 
+                                SQL_YN, turn_gate, args=args)
+        if turn_gate != -1:
+            new_str = ' '.join(map(lambda x: self.prior_corpus.dictionary.idx2word[x], new_history))
+        new_str = new_str.split('<t')[-2][2:].strip().replace(' .', '.').replace(' ?', '?').replace(' !', '!').replace(' ,', ',')
+        for i in range(1000, 1030):
+            new_str = new_str.replace('<fl_'+str(i)+'>', str(i))
+        terminate = False
+        if new_str[-len('<eod>'):] == '<eod>':
+            terminate = True
+            new_str = new_str[:-len('<eod>')].strip()
+        return ('Agent' if utterances[-1][0] == 'Customer' else 'Customer', new_str), terminate, predict_action
     
-    def infer(self, args, model, dataloader, resume=False, save_dir='runs/exp'):
+    def converse(self, args, model, dataloader, resume=False, save_dir='runs/exp'):
         # If training is set to resume
         if resume:
             latest_checkpoint_path = Checkpoint.get_latest_checkpoint(self.model_dir)
@@ -501,7 +484,30 @@ class InferModel(object):
             print('Please Resume !')
             raise
         for batch_idx, (prior_items, selfplay_items) in enumerate(dataloader):
-            print('running', batch_idx)
-            self.infer_one(model=model, prior_items=prior_items, selfplay_items=selfplay_items, args=args)
+            print(batch_idx, prior_items[0])
+            terminate = False
+            utterances = []
+            while not terminate:
+                utterances.append(('Customer', raw_input('Customer: ')))
+                next_utterance, terminate, predict_action = self.converse_one(utterances=utterances, model=model, prior_items=prior_items, selfplay_items=selfplay_items, args=args)
+                print('Agent: ' + next_utterance[1])
+                utterances.append(next_utterance)
+            print(predict_action)
             break
         return model
+    
+    def reply_one(self, args, model, data_list, data_idx, utterances):
+        # latest_checkpoint_path = Checkpoint.get_latest_checkpoint(self.model_dir)
+        # resume_checkpoint = Checkpoint.load(latest_checkpoint_path)
+        # model.load_state_dict(resume_checkpoint.model)
+        # self.optimizer = None
+        # self.args = args
+        # model.args = args
+        prior_items, selfplay_items = data_list[data_idx]
+        next_utterance, terminate, predict_action = self.converse_one(utterances=utterances, model=model, prior_items=prior_items, selfplay_items=selfplay_items, args=args)
+        utterances.append(next_utterance)
+        return utterances, terminate, predict_action
+    
+    def main(self, args, model, dataloader, resume=False, save_dir='runs/exp'):
+        self.converse(args, model, dataloader, resume=resume, save_dir=save_dir)
+        return None

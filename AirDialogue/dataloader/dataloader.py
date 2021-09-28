@@ -676,7 +676,7 @@ def collate_fn_inference(data):
 
     return intent_pad, size_intent, source_diag_pad, target_diag_pad, size_dialogue, kb, has_reservation, col_seq, col_num, kb_true_answer
 
-def collate_fn_self_play_eval(data):
+def collate_fn_self_play_eval(data, include_kb=False):
     global eod_id
     global smallkb_n
     intent, size_intent, action, kb, has_reservation, col_seq, col_num, ans_seq, truth_seq, kb_true_answer, SQL_YN = zip(*data)
@@ -695,6 +695,8 @@ def collate_fn_self_play_eval(data):
     col_num = torch.tensor(col_num, dtype=torch.int64)
 
     # return intent_pad, size_intent, action_pad, filter_kb, has_reservation, col_seq, col_num, ans_seq, truth_seq, SQL_YN_tensor, kb_true_answer_onehot, kb_true_answer 
+    if include_kb:
+        return intent_pad, size_intent, action_pad, has_reservation, col_seq, truth_seq, SQL_YN_tensor, kb_true_answer, kb
     return intent_pad, size_intent, action_pad, has_reservation, col_seq, truth_seq, SQL_YN_tensor, kb_true_answer
 
 def loader(batch_size, toy, max_len=None, need_shuffle=False, mask=False, only_f=False, dev=False, n_sample=-1, small_n=30, args=None):

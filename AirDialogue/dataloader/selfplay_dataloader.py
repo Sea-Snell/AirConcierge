@@ -236,7 +236,7 @@ def list_to_tensor(ll):
         tensor_list.append(torch.tensor(np.array(i).astype(int)))
     return tensor_list
 
-def collate_fn_self_play_eval(data):
+def collate_fn_self_play_eval(data, include_kb=False):
     global eod_id
     global smallkb_n
     intent, size_intent, action, kb, has_reservation, col_seq, col_num, ans_seq, truth_seq, kb_true_answer, SQL_YN, filter_index, turn_gate = zip(*data)
@@ -263,6 +263,8 @@ def collate_fn_self_play_eval(data):
     col_seq = torch.tensor(col_seq) # (b, 12, 1)
 
     # return intent_pad, size_intent, action_pad, filter_kb, has_reservation, col_seq, col_num, ans_seq, truth_seq, SQL_YN_tensor, kb_true_answer_onehot, kb_true_answer 
+    if include_kb:
+        return intent_pad, size_intent, action_pad, kb, has_reservation, col_seq, truth_seq, SQL_YN_tensor, turn_gate, kb
     return intent_pad, size_intent, action_pad, kb, has_reservation, col_seq, truth_seq, SQL_YN_tensor, turn_gate
 
 def SelfPlayEval_loader_2(batch_size, toy, max_len=None, need_shuffle=False, mask=False, only_f=False, dev=False, n_sample=-1, small_n=30, args=None):
