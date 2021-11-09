@@ -180,7 +180,7 @@ class ConverseModel(object):
                                     token = self.prior_corpus.dictionary.idx2word[sequence_symbols[s][i]]
                                     if token == '<t1>' and prior_length[i] == 0:
                                         prior_sents[i].append(token)
-                                        prior_length[i] = len(sents[i])
+                                        prior_length[i] = len(prior_sents[i])
                                         prior_history[i].append(sequence_symbols[s][i])
                                     elif token != '<t1>' and prior_length[i] == 0:
                                         prior_sents[i].append(token)
